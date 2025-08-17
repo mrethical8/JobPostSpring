@@ -1,22 +1,38 @@
-# Use Maven to build the source
-FROM maven:3.8.6-openjdk-17 AS build
+# Use OpenJDK base image
+FROM openjdk:17-jdk-slim as build
 
+# Set working directory
 WORKDIR /app
 
+# Copy Maven wrapper and pom.xml
+COPY mvnw .
+COPY .mvn .mvn
 COPY pom.xml .
-COPY src ./src
 
-RUN mvn clean package -DskipTests
+# Give executable permission to mvnw
+RUN chmod +x mvnw
 
-# Use OpenJDK for optimal runtime (small image)
+# Download dependencies (helps with caching)
+RUN ./mvnw dependency:go-offline -B
+
+# Copy source code
+COPY src src
+
+# Build the application
+RUN ./mvnw clean package -DskipTests
+
+# --------------------
+# Run Stage
+# --------------------
 FROM openjdk:17-jdk-slim
 
 WORKDIR /app
 
-# Copy only the final jar from builder
-COPY --from=build /app/target/SpringMongoDB-main-0.0.1-SNAPSHOT.jar app.jar
+# Copy the jar from build stage
+COPY --from=build /app/target/*.jar app.jar
 
+# Expose application port (adjust if needed)
 EXPOSE 8080
 
-# Run your Spring Boot application
+# Run the Spring Boot app
 ENTRYPOINT ["java", "-jar", "app.jar"]
